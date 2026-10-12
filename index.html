@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exposure Triangle Calculator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4">
+<div class="max-w-2xl mx-auto">
+  <h1 class="text-2xl font-bold text-orange-400 mb-1">Exposure Triangle Calculator</h1>
+  <p class="text-gray-400 text-sm mb-6">Lock two values, adjust the third to find equivalent exposures.</p>
+
+  <!-- EV Display -->
+  <div class="bg-gray-800 rounded-xl p-4 mb-6 border border-gray-700">
+    <div class="flex justify-between items-center mb-3">
+      <span class="text-gray-300 font-semibold">Exposure Value (EV)</span>
+      <span id="evDisplay" class="text-3xl font-bold text-orange-400">0.0</span>
+    </div>
+    <!-- Light meter bar -->
+    <div class="mb-1 text-xs text-gray-400 flex justify-between">
+      <span>Very Dark</span><span>Dark</span><span>Normal</span><span>Bright</span><span>Very Bright</span>
+    </div>
+    <div class="h-4 bg-gray-700 rounded-full overflow-hidden">
+      <div id="meterBar" class="h-full rounded-full transition-all duration-300" style="width:50%"></div>
+    </div>
+    <div id="meterLabel" class="text-center text-sm text-gray-300 mt-2"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="space-y-5 mb-6">
+    <!-- ISO -->
+    <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+      <div class="flex justify-between items-center mb-2">
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="lockISO" onchange="toggleLock('iso')" class="w-4 h-4 accent-orange-400" aria-label="Lock ISO">
+          <label for="lockISO" class="font-semibold text-lg">ISO</label>
+        </div>
+        <span id="isoVal" class="text-2xl font-bold text-orange-300">100</span>
+      </div>
+      <input type="range" id="isoSlider" min="0" max="7" step="1" value="0"
+        oninput="onSlider('iso')" class="w-full accent-orange-400"
+        aria-label="ISO slider">
+      <div class="flex justify-between text-xs text-gray-500 mt-1">
+        <span>100</span><span>200</span><span>400</span><span>800</span><span>1600</span><span>3200</span><span>6400</span><span>12800</span>
+      </div>
+    </div>
+
+    <!-- Aperture -->
+    <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+      <div class="flex justify-between items-center mb-2">
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="lockAperture" onchange="toggleLock('aperture')" class="w-4 h-4 accent-orange-400" aria-label="Lock Aperture">
+          <label for="lockAperture" class="font-semibold text-lg">Aperture</label>
+        </div>
+        <span id="apertureVal" class="text-2xl font-bold text-orange-300">f/1.4</span>
+      </div>
+      <input type="range" id="apertureSlider" min="0" max="8" step="1" value="0"
+        oninput="onSlider('aperture')" class="w-full accent-orange-400"
+        aria-label="Aperture slider">
+      <div class="flex justify-between text-xs text-gray-500 mt-1">
+        <span>1.4</span><span>2</span><span>2.8</span><span>4</span><span>5.6</span><span>8</span><span>11</span><span>16</span><span>22</span>
+      </div>
+      <div id="dofIndicator" class="mt-2 text-sm text-blue-300"></div>
+    </div>
+
+    <!-- Shutter Speed -->
+    <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+      <div class="flex justify-between items-center mb-2">
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="lockShutter" onchange="toggleLock('shutter')" class="w-4 h-4 accent-orange-400" aria-label="Lock Shutter Speed">
+          <label for="lockShutter" class="font-semibold text-lg">Shutter Speed</label>
+        </div>
+        <span id="shutterVal" class="text-2xl font-bold text-orange-300">1/125s</span>
+      </div>
+      <input type="range" id="shutterSlider" min="0" max="14" step="1" value="7"
+        oninput="onSlider('shutter')" class="w-full accent-orange-400"
+        aria-label="Shutter speed slider">
+      <div class="flex justify-between text-xs text-gray-500 mt-1">
+        <span>1/8000</span><span></span><span>1/500</span><span></span><span>1/60</span><span></span><span>1/8</span><span></span><span>1s</span><span></span><span>8s</span><span></span><span></span><span></span><span>30s</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equivalent Exposures -->
+  <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+    <h2 class="font-semibold text-gray-200 mb-3">Equivalent Exposures (same EV, two locked)</h2>
+    <div id="equivList" class="space-y-1 text-sm"></div>
+  </div>
+</div>
+
+<script>
+const isoStops = [100,200,400,800,1600,3200,6400,12800];
+const apertureStops = [1.4,2,2.8,4,5.6,8,11,16,22];
+const shutterStops = [1/8000,1/4000,1/2000,1/1000,1/500,1/250,1/125,1/60,1/30,1/15,1/8,1/4,1/2,1,2,4,8,15,30];
+// We'll use a subset for the slider (15 steps)
+const shutterSliderStops = [1/8000,1/4000,1/2000,1/1000,1/500,1/250,1/125,1/60,1/30,1/15,1/8,1/4,1,4,8,15,30];
+// Align to 15 stops
+const shutterDisplay = ['1/8000','1/4000','1/2000','1/1000','1/500','1/250','1/125','1/60','1/30','1/15','1/8','1/4','1s','4s','8s','15s','30s'];
+
+let state = { iso: 0, aperture: 0, shutter: 6 };
+let locked = { iso: false, aperture: false, shutter: false };
+
+function shutterLabel(idx) { return shutterDisplay[idx]; }
+function apertureLabel(idx) { return 'f/' + apertureStops[idx]; }
+function isoLabel(idx) { return isoStops[idx]; }
+
+// EV = log2(N²/t) + log2(ISO/100) — standard photographic EV
+// N = aperture f-number, t = shutter time in seconds
+function calcEV(isoIdx, apIdx, shIdx) {
+  const iso = isoStops[isoIdx];
+  const ap = apertureStops[apIdx];
+  const t = shutterSliderStops[shIdx];
+  return Math.log2((ap * ap) / t) - Math.log2(iso / 100);
+}
+
+function updateDisplay() {
+  document.getElementById('isoVal').textContent = isoLabel(state.iso);
+  document.getElementById('apertureVal').textContent = apertureLabel(state.aperture);
+  document.getElementById('shutterVal').textContent = shutterLabel(state.shutter);
+  document.getElementById('isoSlider').value = state.iso;
+  document.getElementById('apertureSlider').value = state.aperture;
+  document.getElementById('shutterSlider').value = state.shutter;
+
+  const ev = calcEV(state.iso, state.aperture, state.shutter);
+  document.getElementById('evDisplay').textContent = ev.toFixed(1);
+
+  // Meter bar: EV typically ranges from -5 (moonlight) to 17 (sunny)
+  // Map EV 0-16 → 0-100%
+  const pct = Math.max(5, Math.min(95, ((ev + 2) / 18) * 100));
+  const bar = document.getElementById('meterBar');
+  bar.style.width = pct + '%';
+  // Color by brightness
+  if (ev < 2) { bar.style.background = '#1e40af'; }
+  else if (ev < 6) { bar.style.background = '#1d4ed8'; }
+  else if (ev < 10) { bar.style.background = '#22c55e'; }
+  else if (ev < 14) { bar.style.background = '#eab308'; }
+  else { bar.style.background = '#ef4444'; }
+
+  const labels = ['Very dark (night)','Dark (indoors)','Normal (shade)','Bright (overcast)','Very bright (sunny)'];
+  const li = Math.min(4, Math.floor((ev + 2) / 4));
+  document.getElementById('meterLabel').textContent = labels[Math.max(0,li)];
+
+  // DOF indicator
+  const ap = apertureStops[state.aperture];
+  let dof;
+  if (ap <= 1.4) dof = 'Extremely shallow depth of field — strong background blur (bokeh)';
+  else if (ap <= 2.8) dof = 'Shallow depth of field — good subject separation';
+  else if (ap <= 5.6) dof = 'Moderate depth of field — balanced sharpness';
+  else if (ap <= 11) dof = 'Deep depth of field — most of scene in focus';
+  else dof = 'Maximum depth of field — everything sharp (diffraction may occur)';
+  document.getElementById('dofIndicator').textContent = dof;
+
+  renderEquiv(ev);
+}
+
+function renderEquiv(targetEV) {
+  const lockedCount = Object.values(locked).filter(Boolean).length;
+  const list = document.getElementById('equivList');
+  list.innerHTML = '';
+
+  if (lockedCount < 2) {
+    list.innerHTML = '<span class="text-gray-500">Lock two parameters to see equivalent combinations for the third.</span>';
+    return;
+  }
+
+  const entries = [];
+  if (locked.iso && locked.aperture) {
+    // Vary shutter
+    shutterSliderStops.forEach((t, si) => {
+      const ev = calcEV(state.iso, state.aperture, si);
+      if (Math.abs(ev - targetEV) < 0.1) {
+        entries.push({ label: `ISO ${isoLabel(state.iso)}, ${apertureLabel(state.aperture)}, ${shutterLabel(si)}`, match: si === state.shutter });
+      }
+    });
+  } else if (locked.iso && locked.shutter) {
+    apertureStops.forEach((a, ai) => {
+      const ev = calcEV(state.iso, ai, state.shutter);
+      if (Math.abs(ev - targetEV) < 0.1) {
+        entries.push({ label: `ISO ${isoLabel(state.iso)}, ${apertureLabel(ai)}, ${shutterLabel(state.shutter)}`, match: ai === state.aperture });
+      }
+    });
+  } else if (locked.aperture && locked.shutter) {
+    isoStops.forEach((iso, ii) => {
+      const ev = calcEV(ii, state.aperture, state.shutter);
+      if (Math.abs(ev - targetEV) < 0.1) {
+        entries.push({ label: `ISO ${isoLabel(ii)}, ${apertureLabel(state.aperture)}, ${shutterLabel(state.shutter)}`, match: ii === state.iso });
+      }
+    });
+  } else {
+    // Show some combos across all
+    for (let ii=0; ii<isoStops.length; ii++) {
+      for (let ai=0; ai<apertureStops.length; ai++) {
+        for (let si=0; si<shutterSliderStops.length; si++) {
+          if (Math.abs(calcEV(ii,ai,si)-targetEV) < 0.1) {
+            entries.push({ label: `ISO ${isoLabel(ii)}, ${apertureLabel(ai)}, ${shutterLabel(si)}`,
+              match: ii===state.iso&&ai===state.aperture&&si===state.shutter });
+          }
+        }
+      }
+    }
+  }
+
+  if (entries.length === 0) {
+    list.innerHTML = '<span class="text-gray-500">No equivalent found at this EV with current locked values.</span>';
+    return;
+  }
+  entries.slice(0,12).forEach(e => {
+    const div = document.createElement('div');
+    div.className = e.match
+      ? 'bg-orange-900/40 border border-orange-600 rounded px-3 py-1.5 font-semibold text-orange-300'
+      : 'bg-gray-700/40 rounded px-3 py-1.5 text-gray-300';
+    div.textContent = e.label + (e.match ? ' ← current' : '');
+    list.appendChild(div);
+  });
+}
+
+function onSlider(param) {
+  state[param] = parseInt(document.getElementById(param + 'Slider').value);
+  updateDisplay();
+}
+
+function toggleLock(param) {
+  locked[param] = document.getElementById('lock' + param.charAt(0).toUpperCase() + param.slice(1)).checked;
+  updateDisplay();
+}
+
+// Init sliders max
+document.getElementById('shutterSlider').max = shutterSliderStops.length - 1;
+updateDisplay();
+</script>
+</body>
+</html>
